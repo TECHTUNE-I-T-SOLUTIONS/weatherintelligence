@@ -1,0 +1,12 @@
+# Robots.txt for Weather Intelligence
+User-agent: *
+Allow: /
+
+# Sitemaps
+Sitemap: https://weather-intelligence.vercel.app/sitemap.xml
+
+# Crawl delay (in seconds)
+Crawl-delay: 1
+
+# Disallow private paths (if any)
+Disallow: /api/private/

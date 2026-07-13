@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather API Test - Corrected Implementation</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        .test {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #00ff00;
+        }
+        .error {
+            color: #ff0000;
+            border-color: #ff0000;
+        }
+        .success {
+            color: #00ff00;
+        }
+        .info {
+            color: #ffff00;
+            border-color: #ffff00;
+        }
+    </style>
+</head>
+<body>
+    <h1>Weather API Connection Test - Corrected Implementation</h1>
+    <div id="results"></div>
+
+    <script>
+        const API_KEY = 'wai_live_24ce18f2a3d7303bd35123aa04de6f1b';
+        const API_BASE = 'https://api.weather-ai.co/v1';
+        const resultsDiv = document.getElementById('results');
+
+        function log(message, isError = false, isInfo = false) {
+            const div = document.createElement('div');
+            div.className = `test ${isError ? 'error' : isInfo ? 'info' : 'success'}`;
+            div.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            resultsDiv.appendChild(div);
+        }
+
+        async function testAPI() {
+            log('Starting API tests with CORRECTED implementation...', false, true);
+            log('Using Bearer token authentication in Authorization header');
+            log('Using endpoint: /v1/weather');
+            
+            // Test 1: Check if domain is reachable
+            log('Test 1: Checking if api.weather-ai.co is reachable...');
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                
+                const response = await fetch(API_BASE, { 
+                    method: 'HEAD',
+                    signal: controller.signal 
+                });
+                
+                clearTimeout(timeoutId);
+                log(`✓ Domain reachable (Status: ${response.status})`);
+            } catch (error) {
+                log(`✗ Domain not reachable: ${error.message}`, true);
+            }
+
+            // Test 2: Try weather endpoint with CORRECT authentication
+            log('Test 2: Testing /v1/weather endpoint with Bearer token...');
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                
+                const url = `${API_BASE}/weather?lat=8.481457998713092&lon=4.617534143408677&days=7&ai=true&units=metric`;
+                log(`Fetching: ${url}`);
+                log(`Authorization: Bearer ${API_KEY.substring(0, 10)}...`);
+                
+                const response = await fetch(url, {
+                    signal: controller.signal,
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`
+                    }
+                });
+                
+                clearTimeout(timeoutId);
+                log(`Response status: ${response.status} ${response.statusText}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✓ Success! Data received: ${JSON.stringify(data).substring(0, 150)}...`);
+                } else {
+                    const error = await response.text();
+                    log(`✗ Error ${response.status}: ${error}`, true);
+                }
+            } catch (error) {
+                log(`✗ Request failed: ${error.message}`, true);
+            }
+
+            // Test 3: Try search endpoint
+            log('Test 3: Testing /v1/search endpoint...');
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                
+                const url = `${API_BASE}/search?q=Lagos`;
+                log(`Fetching: ${url}`);
+                
+                const response = await fetch(url, {
+                    signal: controller.signal,
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`
+                    }
+                });
+                
+                clearTimeout(timeoutId);
+                log(`Response status: ${response.status} ${response.statusText}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✓ Success! Results: ${JSON.stringify(data).substring(0, 150)}...`);
+                } else {
+                    const error = await response.text();
+                    log(`✗ Error ${response.status}: ${error}`, true);
+                }
+            } catch (error) {
+                log(`✗ Request failed: ${error.message}`, true);
+            }
+
+            log('Tests completed!', false, true);
+            log('NOTE: If tests fail, the API service may still be down.', false, true);
+        }
+
+        // Run tests when page loads
+        window.addEventListener('load', testAPI);
+    </script>
+</body>
+</html>
