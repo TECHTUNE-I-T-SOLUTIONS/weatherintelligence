@@ -1,4 +1,3 @@
-import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import ThemeProvider from '@/components/providers/theme-provider'
@@ -39,7 +38,6 @@ export default function RootLayout({
         <ThemeProvider>
           <QueryProvider>
             {children}
-            {process.env.NODE_ENV === 'production' && <Analytics />}
           </QueryProvider>
         </ThemeProvider>
         <Toaster position="bottom-right" richColors />

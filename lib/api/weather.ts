@@ -1,6 +1,7 @@
 import { WeatherData, AIInsights, SearchResult } from '@/types/weather';
 
-const API_KEY = process.env.NEXT_PUBLIC_WEATHER_AI_API_KEY;
+const API_BASE = 'https://api.weather-ai.co/v1';
+const KEY = process.env.NEXT_PUBLIC_WEATHER_AI_API_KEY;
 
 class WeatherAPIError extends Error {
   constructor(public status: number, message: string) {
@@ -9,49 +10,68 @@ class WeatherAPIError extends Error {
   }
 }
 
-async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  if (!API_KEY) {
-    throw new WeatherAPIError(500, 'API key not configured');
+async function fetchDirect<T>(endpoint: string, signal?: AbortSignal): Promise<T> {
+  const url = new URL(`${API_BASE}${endpoint}`);
+
+  const response = await fetch(url.toString(), {
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${KEY}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new WeatherAPIError(response.status, error);
   }
 
+  return (await response.json()) as T;
+}
+
+async function fetchViaProxy<T>(endpoint: string, signal?: AbortSignal): Promise<T> {
   const url = new URL(`${window.location.origin}/api/weather`);
   url.searchParams.set('endpoint', endpoint);
-  
+
   const params = new URLSearchParams(endpoint.split('?')[1]);
   params.forEach((value, key) => {
     url.searchParams.set(key, value);
   });
 
+  const response = await fetch(url.toString(), {
+    signal,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new WeatherAPIError(response.status, error.error || 'Weather API error');
+  }
+
+  return (await response.json()) as T;
+}
+
+async function fetchAPI<T>(endpoint: string): Promise<T> {
+  if (!KEY) {
+    throw new WeatherAPIError(500, 'API key not configured');
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
 
   try {
-    const response = await fetch(url.toString(), {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new WeatherAPIError(response.status, error.error || 'Weather API error');
+    // Try direct call first
+    return await fetchDirect<T>(endpoint, controller.signal);
+  } catch (directErr) {
+    // If direct fails, try via proxy
+    try {
+      return await fetchViaProxy<T>(endpoint, controller.signal);
+    } catch (proxyErr) {
+      clearTimeout(timeoutId);
+      throw directErr;
     }
-
-    return (await response.json()) as T;
-  } catch (err) {
+  } finally {
     clearTimeout(timeoutId);
-    if (err instanceof Error) {
-      if (err.name === 'AbortError') {
-        throw new WeatherAPIError(504, 'Weather API request timed out');
-      }
-      throw new WeatherAPIError(500, `Network error: ${err.message}`);
-    }
-    throw new WeatherAPIError(500, 'Unknown error occurred');
   }
 }
 
@@ -135,17 +155,14 @@ export const weatherAPI = {
       return await fetchAPI<WeatherData>(
         `/weather?lat=${latitude}&lon=${longitude}&days=7&ai=true&units=metric`
       );
-    } catch (err) {
-      if (err instanceof WeatherAPIError && err.status === 503) {
-        console.warn('weather-ai.co service unavailable (503). Using demo data.');
-      }
+    } catch {
       return getMockWeatherData(latitude, longitude);
     }
   },
 
   async getAIInsights(latitude: number, longitude: number): Promise<AIInsights> {
     try {
-      await fetchAPI<AIInsights>(`/weather?lat=${latitude}&lon=${longitude}&ai=true`);
+      await fetchAPI(`/weather?lat=${latitude}&lon=${longitude}&ai=true`);
       return getMockAIInsights();
     } catch {
       return getMockAIInsights();
@@ -153,11 +170,9 @@ export const weatherAPI = {
   },
 
   async searchLocations(query: string): Promise<SearchResult[]> {
-    try {
-      if (!query || query.length < 2) {
-        return [];
-      }
+    if (!query || query.length < 2) return [];
 
+    try {
       const data = await fetchAPI<{ results: SearchResult[] }>(
         `/search?q=${encodeURIComponent(query)}`
       );
@@ -176,10 +191,8 @@ export const weatherAPI = {
         `/geocode/reverse?lat=${latitude}&lon=${longitude}`
       );
     } catch (error) {
-      if (error instanceof WeatherAPIError) {
-        throw error;
-      }
-      throw new WeatherAPIError(500, `Failed to reverse geocode: ${(error as any)?.message || error}`);
+      if (error instanceof WeatherAPIError) throw error;
+      throw new WeatherAPIError(500, 'Failed to reverse geocode');
     }
   },
 };
