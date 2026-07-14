@@ -1,7 +1,6 @@
 import { WeatherData, AIInsights, SearchResult } from '@/types/weather';
 
 const API_BASE = 'https://api.weather-ai.co/v1';
-const KEY = process.env.NEXT_PUBLIC_WEATHER_AI_API_KEY;
 
 class WeatherAPIError extends Error {
   constructor(public status: number, message: string) {
@@ -10,25 +9,7 @@ class WeatherAPIError extends Error {
   }
 }
 
-async function fetchDirect<T>(endpoint: string, signal?: AbortSignal): Promise<T> {
-  const url = new URL(`${API_BASE}${endpoint}`);
-  const response = await fetch(url.toString(), {
-    signal,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${KEY}`,
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new WeatherAPIError(response.status, error);
-  }
-
-  return (await response.json()) as T;
-}
-
-async function fetchViaProxy<T>(endpoint: string, signal?: AbortSignal): Promise<T> {
+async function fetchViaProxy<T>(endpoint: string): Promise<T> {
   const url = new URL(`${window.location.origin}/api/weather`);
   url.searchParams.set('endpoint', endpoint);
 
@@ -36,7 +17,6 @@ async function fetchViaProxy<T>(endpoint: string, signal?: AbortSignal): Promise
   params.forEach((value, key) => url.searchParams.set(key, value));
 
   const response = await fetch(url.toString(), {
-    signal,
     headers: { 'Content-Type': 'application/json' },
   });
 
@@ -49,20 +29,11 @@ async function fetchViaProxy<T>(endpoint: string, signal?: AbortSignal): Promise
 }
 
 async function fetchAPI<T>(endpoint: string): Promise<T> {
-  if (!KEY) throw new WeatherAPIError(500, 'API key not configured');
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
 
   try {
-    return await fetchDirect<T>(endpoint, controller.signal);
-  } catch (directErr) {
-    try {
-      return await fetchViaProxy<T>(endpoint, controller.signal);
-    } catch {
-      clearTimeout(timeoutId);
-      throw directErr;
-    }
+    return await fetchViaProxy<T>(endpoint);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -188,7 +159,6 @@ export const weatherAPI = {
     return mockInsights();
   },
 
-  // Uses free OpenStreetMap Nominatim API for geocoding
   async searchLocations(query: string): Promise<SearchResult[]> {
     if (!query || query.length < 2) return [];
     try {
@@ -232,14 +202,7 @@ export const weatherAPI = {
       const raw = await fetchAPI<any>('/ip-lookup');
       const geo = raw?.geo || raw;
       if (geo?.lat && geo?.lon) {
-        const loc = {
-          name: geo.city || geo.city_name || 'Unknown',
-          region: geo.region || '',
-          country: geo.country || '',
-          latitude: geo.lat,
-          longitude: geo.lon,
-        };
-        // Try reverse geocode to get a proper city name
+        const loc = { name: geo.city || geo.city_name || 'Unknown', region: geo.region || '', country: geo.country || '', latitude: geo.lat, longitude: geo.lon };
         const rev = await weatherAPI.reverseGeocode(geo.lat, geo.lon);
         return rev || loc;
       }
