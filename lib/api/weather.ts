@@ -13,9 +13,6 @@ async function fetchViaProxy<T>(endpoint: string): Promise<T> {
   const url = new URL(`${window.location.origin}/api/weather`);
   url.searchParams.set('endpoint', endpoint);
 
-  const params = new URLSearchParams(endpoint.split('?')[1]);
-  params.forEach((value, key) => url.searchParams.set(key, value));
-
   const response = await fetch(url.toString(), {
     headers: { 'Content-Type': 'application/json' },
   });
@@ -199,19 +196,20 @@ export const weatherAPI = {
 
   async lookupByIP(): Promise<SearchResult | null> {
     try {
-      // Use /weather?ip=auto per docs — works on all plans, geo in response body
-      const raw = await fetchAPI<any>('/weather?ip=auto&days=1&ai=false&units=metric');
-      const geo = raw?._geo || raw;
-      if (geo?.lat && geo?.lon) {
-        const loc = {
-          name: geo.city || geo.city_name || 'Unknown',
-          region: geo.region || '',
-          country: geo.country || '',
-          latitude: geo.lat,
-          longitude: geo.lon,
+      // Use /weather-geo per docs — returns geo in response headers
+      const response = await fetchViaProxy<any>('/weather-geo?ip=auto&days=1&ai=false&units=metric');
+      const city = response.headers.get('X-City');
+      const region = response.headers.get('X-Region');
+      const country = response.headers.get('X-Country');
+      
+      if (city) {
+        return {
+          name: city,
+          region: region || '',
+          country: country || '',
+          latitude: 0,
+          longitude: 0,
         };
-        const rev = await weatherAPI.reverseGeocode(geo.lat, geo.lon);
-        return rev || loc;
       }
       return null;
     } catch { return null; }

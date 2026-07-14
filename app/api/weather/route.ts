@@ -44,20 +44,19 @@ export async function GET(request: NextRequest) {
 
     const data = await response.json();
     
-    // Forward geo headers from IP lookup responses in the JSON body
+    // Forward geo headers from /weather-geo responses
+    const headers = new Headers();
     const country = response.headers.get('X-Country');
     const region = response.headers.get('X-Region');
     const city = response.headers.get('X-City');
     
     if (country || region || city) {
-      data._geo = {
-        city: city || '',
-        region: region || '',
-        country: country || '',
-      };
+      headers.set('X-Country', country || '');
+      headers.set('X-Region', region || '');
+      headers.set('X-City', city || '');
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json(data, { headers });
   } catch (error) {
     return NextResponse.json(
       { error: `Network error: ${(error as Error).message}` },
