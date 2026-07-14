@@ -1,4 +1,3 @@
-// Weather data types
 export interface WeatherData {
   location: Location;
   current: CurrentWeather;

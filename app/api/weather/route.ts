@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const API_BASE = 'https://api.weather-ai.co/v1';
-// Server-side only env variable - never exposed to browser
 const KEY = process.env.WEATHER_AI_API_KEY || process.env.NEXT_PUBLIC_WEATHER_AI_API_KEY;
 
 export async function GET(request: NextRequest) {
@@ -17,6 +16,13 @@ export async function GET(request: NextRequest) {
 
   try {
     const url = new URL(`${API_BASE}${endpoint}`);
+
+    // Copy remaining query params
+    searchParams.forEach((value, key) => {
+      if (key !== 'endpoint') {
+        url.searchParams.set(key, value);
+      }
+    });
 
     const response = await fetch(url.toString(), {
       headers: {

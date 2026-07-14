@@ -16,6 +16,7 @@ import { ErrorState } from '@/components/error-state'
 import { motion } from 'framer-motion'
 import { Heart, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { weatherAPI } from '@/lib/api/weather'
 
 export default function WeatherPage() {
   const [selectedLocation, setSelectedLocation] = useState<SearchResult | null>(null)
@@ -23,58 +24,23 @@ export default function WeatherPage() {
   const [isLoadingGeolocation, setIsLoadingGeolocation] = useState(false)
   const [isFavorited, setIsFavorited] = useState(false)
 
-  // Load initial data
   useEffect(() => {
     const lastLocation = storage.getLastLocation()
     if (lastLocation) {
       setSelectedLocation(lastLocation)
-    } else if (navigator.geolocation) {
-      setIsLoadingGeolocation(true)
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const coords = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          }
-
-          let locationName = 'Current Location'
-          let region = ''
-          let country = ''
-
-          try {
-            const res = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?lat=${coords.latitude}&lon=${coords.longitude}&format=json&zoom=10`
-            )
-            const data = await res.json()
-            if (data?.address) {
-              locationName = data.address.city || data.address.town || data.address.village || data.address.county || 'Current Location'
-              region = data.address.state || ''
-              country = data.address.country || ''
-            }
-          } catch {
-            // Use defaults if reverse geocoding fails
-          }
-
-          const defaultLocation: SearchResult = {
-            name: locationName,
-            region,
-            country,
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-          }
-          setSelectedLocation(defaultLocation)
-          storage.setLastLocation(defaultLocation)
-          setIsLoadingGeolocation(false)
-        },
-        () => setIsLoadingGeolocation(false)
-      )
+      return
     }
 
-    // Load favorites
-    setFavorites(storage.getFavorites())
+    setIsLoadingGeolocation(true)
+    weatherAPI.lookupByIP().then((loc) => {
+      if (loc) {
+        setSelectedLocation(loc)
+        storage.setLastLocation(loc)
+      }
+      setIsLoadingGeolocation(false)
+    })
   }, [])
 
-  // Check if current location is favorited
   useEffect(() => {
     if (selectedLocation) {
       const favs = storage.getFavorites()
@@ -135,13 +101,10 @@ export default function WeatherPage() {
       <Header />
 
       <div className="flex flex-col lg:flex-row">
-        {/* Sidebar */}
         <DashboardSidebar onLocationSelect={handleLocationSelect} favorites={favorites} />
 
-        {/* Main content */}
         <main className="flex-1 overflow-hidden">
           <div className="container mx-auto px-4 py-8 max-w-7xl">
-            {/* Location header with favorite button */}
             {selectedLocation && !isLoadingGeolocation && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
@@ -152,10 +115,10 @@ export default function WeatherPage() {
                   <MapPin className="w-5 h-5 text-muted-foreground" />
                   <div>
                     <h1 className="text-3xl font-bold">{selectedLocation.name}</h1>
-                    {selectedLocation.region && (
+                    {selectedLocation.country && (
                       <p className="text-muted-foreground">
-                        {selectedLocation.region}
-                        {selectedLocation.country && ` • ${selectedLocation.country}`}
+                        {selectedLocation.region ? `${selectedLocation.region} • ` : ''}
+                        {selectedLocation.country}
                       </p>
                     )}
                   </div>
@@ -167,18 +130,14 @@ export default function WeatherPage() {
                   size="lg"
                   className={isFavorited ? 'bg-red-600 hover:bg-red-700' : ''}
                 >
-                  <Heart
-                    className={`w-5 h-5 ${isFavorited ? 'fill-current' : ''}`}
-                  />
+                  <Heart className={`w-5 h-5 ${isFavorited ? 'fill-current' : ''}`} />
                   {isFavorited ? 'Favorited' : 'Add to Favorites'}
                 </Button>
               </motion.div>
             )}
 
-            {/* Loading state */}
             {isLoading && <LoadingSkeleton />}
 
-            {/* Error state */}
             {hasError && !isLoading && (
               <ErrorState
                 error="Failed to load weather data. Please try again."
@@ -186,7 +145,6 @@ export default function WeatherPage() {
               />
             )}
 
-            {/* Content */}
             {!isLoading && !hasError && weatherQuery.data && (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -194,7 +152,6 @@ export default function WeatherPage() {
                 transition={{ staggerChildren: 0.1 }}
                 className="space-y-8"
               >
-                {/* Weather Hero */}
                 <WeatherHero
                   location={selectedLocation?.name || 'Unknown'}
                   temperature={weatherQuery.data.current.temperature}
@@ -209,7 +166,6 @@ export default function WeatherPage() {
                   low={weatherQuery.data.daily[0]?.temperature_min || 0}
                 />
 
-                {/* Metrics Grid */}
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
@@ -229,8 +185,7 @@ export default function WeatherPage() {
                   />
                 </motion.div>
 
-                {/* 7-Day Forecast */}
-                <DailyForecastDetailed 
+                <DailyForecastDetailed
                   forecast={weatherQuery.data.daily.map(day => ({
                     ...day,
                     condition: day.weather_description,
@@ -238,10 +193,9 @@ export default function WeatherPage() {
                     low: day.temperature_min,
                     precipitation: day.precipitation_sum,
                     windSpeed: day.windspeed_max,
-                  }))} 
+                  }))}
                 />
 
-                {/* AI Insights */}
                 {insightsQuery.data && (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -254,7 +208,6 @@ export default function WeatherPage() {
               </motion.div>
             )}
 
-            {/* Empty state */}
             {!selectedLocation && !isLoadingGeolocation && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
