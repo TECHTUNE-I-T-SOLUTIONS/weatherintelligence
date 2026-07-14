@@ -17,9 +17,12 @@ export async function GET(request: NextRequest) {
   try {
     const url = new URL(`${API_BASE}${endpoint}`);
 
-    // Copy remaining query params
+    // Only copy params that are NOT already in the endpoint
+    const endpointQuery = endpoint.split('?')[1] || '';
+    const existingParams = new URLSearchParams(endpointQuery);
+    
     searchParams.forEach((value, key) => {
-      if (key !== 'endpoint') {
+      if (key !== 'endpoint' && !existingParams.has(key)) {
         url.searchParams.set(key, value);
       }
     });
