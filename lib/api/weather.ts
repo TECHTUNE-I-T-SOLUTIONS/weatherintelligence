@@ -12,7 +12,6 @@ class WeatherAPIError extends Error {
 
 async function fetchDirect<T>(endpoint: string, signal?: AbortSignal): Promise<T> {
   const url = new URL(`${API_BASE}${endpoint}`);
-
   const response = await fetch(url.toString(), {
     signal,
     headers: {
@@ -60,13 +59,11 @@ async function fetchAPI<T>(endpoint: string): Promise<T> {
   const timeoutId = setTimeout(() => controller.abort(), 5000);
 
   try {
-    // Try direct call first
     return await fetchDirect<T>(endpoint, controller.signal);
   } catch (directErr) {
-    // If direct fails, try via proxy
     try {
       return await fetchViaProxy<T>(endpoint, controller.signal);
-    } catch (proxyErr) {
+    } catch {
       clearTimeout(timeoutId);
       throw directErr;
     }
@@ -75,12 +72,12 @@ async function fetchAPI<T>(endpoint: string): Promise<T> {
   }
 }
 
-function getMockWeatherData(latitude: number, longitude: number): WeatherData {
+function buildMockData(latitude: number, longitude: number): WeatherData {
   const now = new Date();
   const dates = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(now);
-    date.setDate(date.getDate() + i);
-    return date.toISOString().split('T')[0];
+    const d = new Date(now);
+    d.setDate(d.getDate() + i);
+    return d.toISOString().split('T')[0];
   });
 
   return {
@@ -133,7 +130,7 @@ function getMockWeatherData(latitude: number, longitude: number): WeatherData {
   };
 }
 
-function getMockAIInsights(): AIInsights {
+function buildMockInsights(): AIInsights {
   return {
     summary: 'Pleasant weather conditions with comfortable temperatures and low humidity. Great day for outdoor activities.',
     activities: ['Perfect for hiking', 'Ideal for picnics', 'Great for outdoor sports', 'Good for photography'],
@@ -152,26 +149,26 @@ function getMockAIInsights(): AIInsights {
 export const weatherAPI = {
   async getWeather(latitude: number, longitude: number): Promise<WeatherData> {
     try {
-      return await fetchAPI<WeatherData>(
+      const data = await fetchAPI<WeatherData>(
         `/weather?lat=${latitude}&lon=${longitude}&days=7&ai=true&units=metric`
       );
+      return normalizeWeatherData(data, latitude, longitude);
     } catch {
-      return getMockWeatherData(latitude, longitude);
+      return buildMockData(latitude, longitude);
     }
   },
 
-  async getAIInsights(latitude: number, longitude: number): Promise<AIInsights> {
+  async getAIInsights(_latitude: number, _longitude: number): Promise<AIInsights> {
     try {
-      await fetchAPI(`/weather?lat=${latitude}&lon=${longitude}&ai=true`);
-      return getMockAIInsights();
+      await fetchAPI(`/weather?lat=${_latitude}&lon=${_longitude}&ai=true`);
+      return buildMockInsights();
     } catch {
-      return getMockAIInsights();
+      return buildMockInsights();
     }
   },
 
   async searchLocations(query: string): Promise<SearchResult[]> {
     if (!query || query.length < 2) return [];
-
     try {
       const data = await fetchAPI<{ results: SearchResult[] }>(
         `/search?q=${encodeURIComponent(query)}`
@@ -196,3 +193,78 @@ export const weatherAPI = {
     }
   },
 };
+
+function normalizeWeatherData(data: any, lat: number, lon: number): WeatherData {
+  if (!data || !data.current) {
+    return buildMockData(lat, lon);
+  }
+
+  const safe = (v: any, fallback = 0) => (v !== null && v !== undefined && !isNaN(v) ? v : fallback);
+  const safeStr = (v: any, fallback = '') => (v !== null && v !== undefined ? String(v) : fallback);
+
+  return {
+    location: {
+      name: safeStr(data.location?.name, 'Unknown'),
+      region: safeStr(data.location?.region),
+      country: safeStr(data.location?.country),
+      latitude: safe(data.location?.latitude, lat),
+      longitude: safe(data.location?.longitude, lon),
+      timezone: safeStr(data.location?.timezone, 'UTC'),
+      timezone_offset: safe(data.location?.timezone_offset),
+    },
+    current: {
+      temperature: safe(data.current.temperature),
+      apparent_temperature: safe(data.current.apparent_temperature, data.current.temperature),
+      humidity: safe(data.current.humidity),
+      precipitation: safe(data.current.precipitation),
+      weather_code: safe(data.current.weather_code),
+      weather_description: safeStr(data.current.weather_description, 'Unknown'),
+      wind_speed: safe(data.current.wind_speed),
+      wind_direction: safe(data.current.wind_direction),
+      uv_index: safe(data.current.uv_index),
+      visibility: safe(data.current.visibility),
+      pressure: safe(data.current.pressure),
+      cloud_cover: safe(data.current.cloud_cover),
+      dew_point: safe(data.current.dew_point),
+      sunrise: safeStr(data.current.sunrise, '06:00'),
+      sunset: safeStr(data.current.sunset, '18:00'),
+      is_day: data.current.is_day ?? true,
+    },
+    hourly: Array.isArray(data.hourly)
+      ? data.hourly.map((h: any) => ({
+          time: safeStr(h.time),
+          temperature: safe(h.temperature),
+          apparent_temperature: safe(h.apparent_temperature, h.temperature),
+          humidity: safe(h.humidity),
+          precipitation: safe(h.precipitation),
+          weather_code: safe(h.weather_code),
+          weather_description: safeStr(h.weather_description, ''),
+          wind_speed: safe(h.wind_speed),
+          wind_direction: safe(h.wind_direction),
+          uv_index: safe(h.uv_index),
+          visibility: safe(h.visibility),
+          cloud_cover: safe(h.cloud_cover),
+        }))
+      : [],
+    daily: Array.isArray(data.daily)
+      ? data.daily.map((d: any) => ({
+          date: safeStr(d.date, new Date().toISOString().split('T')[0]),
+          weather_code: safe(d.weather_code),
+          weather_description: safeStr(d.weather_description, ''),
+          temperature_max: safe(d.temperature_max),
+          temperature_min: safe(d.temperature_min),
+          apparent_temperature_max: safe(d.apparent_temperature_max, d.temperature_max),
+          apparent_temperature_min: safe(d.apparent_temperature_min, d.temperature_min),
+          humidity_max: safe(d.humidity_max),
+          humidity_min: safe(d.humidity_min),
+          precipitation_sum: safe(d.precipitation_sum),
+          precipitation_probability_max: safe(d.precipitation_probability_max),
+          windspeed_max: safe(d.windspeed_max),
+          uv_index_max: safe(d.uv_index_max),
+          sunrise: safeStr(d.sunrise, '06:00'),
+          sunset: safeStr(d.sunset, '18:00'),
+        }))
+      : [],
+    alerts: Array.isArray(data.alerts) ? data.alerts : [],
+  };
+}
