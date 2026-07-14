@@ -199,11 +199,17 @@ export const weatherAPI = {
 
   async lookupByIP(): Promise<SearchResult | null> {
     try {
-      const raw = await fetchAPI<any>('/ip-lookup');
-      const geo = raw?.geo || raw;
-      if (geo?.lat && geo?.lon) {
-        const loc = { name: geo.city || geo.city_name || 'Unknown', region: geo.region || '', country: geo.country || '', latitude: geo.lat, longitude: geo.lon };
-        const rev = await weatherAPI.reverseGeocode(geo.lat, geo.lon);
+      // Use /weather?ip=auto per docs; location comes from response headers
+      const raw = await fetchAPI<any>('/weather?ip=auto&days=1&ai=false&units=metric');
+      const loc: SearchResult = {
+        name: raw.location?.name || sfs(raw.city) || 'Unknown',
+        region: raw.location?.region || sfs(raw.region) || '',
+        country: raw.location?.country || sfs(raw.country) || '',
+        latitude: sf(raw.location?.latitude),
+        longitude: sf(raw.location?.longitude),
+      };
+      if (loc.latitude && loc.longitude) {
+        const rev = await weatherAPI.reverseGeocode(loc.latitude, loc.longitude);
         return rev || loc;
       }
       return null;
