@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Heart, MapPin, Search, X } from 'lucide-react'
+import { Heart, MapPin, Search, X, Navigation } from 'lucide-react'
 import { SearchBar } from '@/components/search-bar'
 import { SearchResult } from '@/types/weather'
 import { storage } from '@/lib/storage'
+import { weatherAPI } from '@/lib/api/weather'
 
 interface DashboardSidebarProps {
   onLocationSelect: (location: SearchResult) => void
@@ -14,11 +15,26 @@ interface DashboardSidebarProps {
 
 export function DashboardSidebar({ onLocationSelect, favorites }: DashboardSidebarProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [locating, setLocating] = useState(false)
   const recentLocations = storage.getSearchHistory()
 
   const handleRemoveFavorite = (e: React.MouseEvent, location: SearchResult) => {
     e.stopPropagation()
     storage.removeFavorite(location)
+  }
+
+  const handleUseMyLocation = async () => {
+    setLocating(true)
+    try {
+      const loc = await weatherAPI.lookupByIP()
+      if (loc) {
+        onLocationSelect(loc)
+        storage.setLastLocation(loc)
+      }
+    } finally {
+      setLocating(false)
+      setIsOpen(false)
+    }
   }
 
   return (
@@ -58,6 +74,23 @@ export function DashboardSidebar({ onLocationSelect, favorites }: DashboardSideb
         className="hidden lg:block sticky top-0 h-screen bg-card border-r border-border overflow-y-auto"
       >
         <div className="p-6 space-y-8">
+          {/* My Location */}
+          <div>
+            <h3 className="text-sm font-semibold text-muted-foreground mb-4 uppercase tracking-wide">
+              My Location
+            </h3>
+            <button
+              onClick={handleUseMyLocation}
+              disabled={locating}
+              className="w-full p-3 rounded-lg border border-border hover:border-blue-400 dark:hover:border-blue-500 hover:bg-secondary/50 transition-all duration-200 text-left flex items-center gap-3"
+            >
+              <Navigation className={`w-5 h-5 text-blue-500 ${locating ? 'animate-spin' : ''}`} />
+              <span className="text-sm font-medium">
+                {locating ? 'Detecting location...' : 'Use my current location'}
+              </span>
+            </button>
+          </div>
+
           {/* Search */}
           <div>
             <h3 className="text-sm font-semibold text-muted-foreground mb-4 uppercase tracking-wide">
@@ -163,6 +196,23 @@ export function DashboardSidebar({ onLocationSelect, favorites }: DashboardSideb
             className="lg:hidden fixed left-0 top-0 z-40 h-full w-80 bg-card border-r border-border overflow-y-auto"
           >
             <div className="p-6 space-y-8">
+              {/* My Location */}
+              <div>
+                <h3 className="text-sm font-semibold text-muted-foreground mb-4 uppercase tracking-wide">
+                  My Location
+                </h3>
+                <button
+                  onClick={handleUseMyLocation}
+                  disabled={locating}
+                  className="w-full p-3 rounded-lg border border-border hover:border-blue-400 dark:hover:border-blue-500 hover:bg-secondary/50 transition-all duration-200 text-left flex items-center gap-3"
+                >
+                  <Navigation className={`w-5 h-5 text-blue-500 ${locating ? 'animate-spin' : ''}`} />
+                  <span className="text-sm font-medium">
+                    {locating ? 'Detecting location...' : 'Use my current location'}
+                  </span>
+                </button>
+              </div>
+
               {/* Search */}
               <div>
                 <h3 className="text-sm font-semibold text-muted-foreground mb-4 uppercase tracking-wide">

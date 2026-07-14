@@ -1,5 +1,4 @@
 import { WeatherData, AIInsights, SearchResult } from '@/types/weather';
-import { getWeatherDescription } from '@/lib/weather-utils';
 
 const API_BASE = 'https://api.weather-ai.co/v1';
 const KEY = process.env.NEXT_PUBLIC_WEATHER_AI_API_KEY;
@@ -34,9 +33,7 @@ async function fetchViaProxy<T>(endpoint: string, signal?: AbortSignal): Promise
   url.searchParams.set('endpoint', endpoint);
 
   const params = new URLSearchParams(endpoint.split('?')[1]);
-  params.forEach((value, key) => {
-    url.searchParams.set(key, value);
-  });
+  params.forEach((value, key) => url.searchParams.set(key, value));
 
   const response = await fetch(url.toString(), {
     signal,
@@ -71,13 +68,8 @@ async function fetchAPI<T>(endpoint: string): Promise<T> {
   }
 }
 
-function sf(v: any, fallback = 0) {
-  return v !== null && v !== undefined && !isNaN(v) ? v : fallback;
-}
-
-function sfs(v: any, fallback = '') {
-  return v !== null && v !== undefined ? String(v) : fallback;
-}
+const sf = (v: any, fb = 0) => (v !== null && v !== undefined && !isNaN(v) ? v : fb);
+const sfs = (v: any, fb = '') => (v !== null && v !== undefined ? String(v) : fb);
 
 const WEATHER_DESC: Record<number, string> = {
   0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
@@ -89,11 +81,9 @@ const WEATHER_DESC: Record<number, string> = {
   96: 'Thunderstorm with slight hail', 99: 'Thunderstorm with heavy hail',
 };
 
-function desc(code: number): string {
-  return WEATHER_DESC[code] || 'Unknown';
-}
+const desc = (code: number) => WEATHER_DESC[code] || 'Unknown';
 
-function toWeatherData(raw: any, lat: number, lon: number): WeatherData {
+function normalizeWeather(raw: any, lat: number, lon: number): WeatherData {
   const c = raw.current || {};
   const d = raw.daily || [];
   const h = raw.hourly || [];
@@ -127,47 +117,35 @@ function toWeatherData(raw: any, lat: number, lon: number): WeatherData {
       sunset: sfs(c.sunset, '18:00'),
       is_day: c.is_day === 1 || c.is_day === true,
     },
-    hourly: Array.isArray(h)
-      ? h.map((x: any) => {
-          const hwc = sf(x.weathercode);
-          return {
-            time: sfs(x.time),
-            temperature: sf(x.temperature || x.temp),
-            apparent_temperature: sf(x.apparent_temperature, x.temperature || x.temp),
-            humidity: sf(x.humidity, 50),
-            precipitation: sf(x.precipitation),
-            weather_code: hwc,
-            weather_description: desc(hwc),
-            wind_speed: sf(x.windspeed),
-            wind_direction: sf(x.winddirection),
-            uv_index: sf(x.uv_index, 3),
-            visibility: sf(x.visibility, 10),
-            cloud_cover: sf(x.cloud_cover, 30),
-          };
-        })
-      : [],
-    daily: Array.isArray(d)
-      ? d.map((x: any) => {
-          const dwc = sf(x.weathercode);
-          return {
-            date: sfs(x.date, new Date().toISOString().split('T')[0]),
-            weather_code: dwc,
-            weather_description: desc(dwc),
-            temperature_max: sf(x.temperature_max || x.temp_max),
-            temperature_min: sf(x.temperature_min || x.temp_min),
-            apparent_temperature_max: sf(x.apparent_temperature_max, x.temperature_max || x.temp_max),
-            apparent_temperature_min: sf(x.apparent_temperature_min, x.temperature_min || x.temp_min),
-            humidity_max: sf(x.humidity_max, 60),
-            humidity_min: sf(x.humidity_min, 40),
-            precipitation_sum: sf(x.precipitation_sum || x.precipitation),
-            precipitation_probability_max: sf(x.precipitation_probability_max, x.precipitation ? 50 : 0),
-            windspeed_max: sf(x.windspeed_max || x.windspeed, 10),
-            uv_index_max: sf(x.uv_index_max, 5),
-            sunrise: sfs(x.sunrise, '06:00'),
-            sunset: sfs(x.sunset, '18:00'),
-          };
-        })
-      : [],
+    hourly: Array.isArray(h) ? h.map((x: any) => {
+      const hwc = sf(x.weathercode);
+      return {
+        time: sfs(x.time), temperature: sf(x.temperature || x.temp),
+        apparent_temperature: sf(x.apparent_temperature, x.temperature || x.temp),
+        humidity: sf(x.humidity, 50), precipitation: sf(x.precipitation),
+        weather_code: hwc, weather_description: desc(hwc),
+        wind_speed: sf(x.windspeed), wind_direction: sf(x.winddirection),
+        uv_index: sf(x.uv_index, 3), visibility: sf(x.visibility, 10),
+        cloud_cover: sf(x.cloud_cover, 30),
+      };
+    }) : [],
+    daily: Array.isArray(d) ? d.map((x: any) => {
+      const dwc = sf(x.weathercode);
+      return {
+        date: sfs(x.date, new Date().toISOString().split('T')[0]),
+        weather_code: dwc, weather_description: desc(dwc),
+        temperature_max: sf(x.temperature_max || x.temp_max),
+        temperature_min: sf(x.temperature_min || x.temp_min),
+        apparent_temperature_max: sf(x.apparent_temperature_max, x.temperature_max || x.temp_max),
+        apparent_temperature_min: sf(x.apparent_temperature_min, x.temperature_min || x.temp_min),
+        humidity_max: sf(x.humidity_max, 60), humidity_min: sf(x.humidity_min, 40),
+        precipitation_sum: sf(x.precipitation_sum || x.precipitation),
+        precipitation_probability_max: sf(x.precipitation_probability_max, x.precipitation ? 50 : 0),
+        windspeed_max: sf(x.windspeed_max || x.windspeed, 10),
+        uv_index_max: sf(x.uv_index_max, 5),
+        sunrise: sfs(x.sunrise, '06:00'), sunset: sfs(x.sunset, '18:00'),
+      };
+    }) : [],
     alerts: [],
   };
 }
@@ -179,30 +157,11 @@ function mockData(lat: number, lon: number): WeatherData {
     d.setDate(d.getDate() + i);
     return d.toISOString().split('T')[0];
   });
-
   return {
-    location: {
-      name: 'Demo Location', region: 'Demo Region', country: 'Demo Country',
-      latitude: lat, longitude: lon, timezone: 'UTC', timezone_offset: 0,
-    },
-    current: {
-      temperature: 25, apparent_temperature: 27, humidity: 65, precipitation: 0,
-      weather_code: 1, weather_description: 'Mainly clear', wind_speed: 12,
-      wind_direction: 180, uv_index: 5, visibility: 10, pressure: 1013,
-      cloud_cover: 25, dew_point: 18, sunrise: '06:30', sunset: '18:45', is_day: true,
-    },
+    location: { name: 'Demo Location', region: '', country: 'Nigeria', latitude: lat, longitude: lon, timezone: 'UTC', timezone_offset: 0 },
+    current: { temperature: 25, apparent_temperature: 27, humidity: 65, precipitation: 0, weather_code: 1, weather_description: 'Mainly clear', wind_speed: 12, wind_direction: 180, uv_index: 5, visibility: 10, pressure: 1013, cloud_cover: 25, dew_point: 18, sunrise: '06:30', sunset: '18:45', is_day: true },
     hourly: [],
-    daily: dates.map((date, i) => ({
-      date, weather_code: i % 3 === 0 ? 0 : 1,
-      weather_description: i % 3 === 0 ? 'Clear sky' : 'Mainly clear',
-      temperature_max: 28 - i, temperature_min: 18 + i,
-      apparent_temperature_max: 30 - i, apparent_temperature_min: 20 + i,
-      humidity_max: 70, humidity_min: 50,
-      precipitation_sum: i % 4 === 0 ? 2.5 : 0,
-      precipitation_probability_max: i % 4 === 0 ? 80 : 20,
-      windspeed_max: 15, uv_index_max: 6 - i,
-      sunrise: '06:30', sunset: '18:45',
-    })),
+    daily: dates.map((date, i) => ({ date, weather_code: i % 3 === 0 ? 0 : 1, weather_description: i % 3 === 0 ? 'Clear sky' : 'Mainly clear', temperature_max: 28 - i, temperature_min: 18 + i, apparent_temperature_max: 30 - i, apparent_temperature_min: 20 + i, humidity_max: 70, humidity_min: 50, precipitation_sum: i % 4 === 0 ? 2.5 : 0, precipitation_probability_max: i % 4 === 0 ? 80 : 20, windspeed_max: 15, uv_index_max: 6 - i, sunrise: '06:30', sunset: '18:45' })),
     alerts: [],
   };
 }
@@ -211,11 +170,7 @@ function mockInsights(): AIInsights {
   return {
     summary: 'Pleasant weather conditions with comfortable temperatures and low humidity.',
     activities: ['Perfect for hiking', 'Ideal for picnics', 'Great for outdoor sports'],
-    outfit_recommendations: [{
-      category: 'Casual',
-      items: ['Light t-shirt', 'Comfortable shorts', 'Sunglasses'],
-      reason: 'Comfortable temperature suitable for light clothing',
-    }],
+    outfit_recommendations: [{ category: 'Casual', items: ['Light t-shirt', 'Comfortable shorts', 'Sunglasses'], reason: 'Comfortable temperature suitable for light clothing' }],
     health_alerts: ['UV index moderate - sunscreen recommended'],
     travel_tips: ['Clear skies expected - great for sightseeing'],
   };
@@ -225,22 +180,51 @@ export const weatherAPI = {
   async getWeather(lat: number, lon: number): Promise<WeatherData> {
     try {
       const raw = await fetchAPI<any>(`/weather?lat=${lat}&lon=${lon}&days=7&ai=false&units=metric`);
-      return toWeatherData(raw, lat, lon);
-    } catch {
-      return mockData(lat, lon);
-    }
+      return normalizeWeather(raw, lat, lon);
+    } catch { return mockData(lat, lon); }
   },
 
   async getAIInsights(_lat: number, _lon: number): Promise<AIInsights> {
     return mockInsights();
   },
 
-  async searchLocations(_query: string): Promise<SearchResult[]> {
-    return [];
+  // Uses free OpenStreetMap Nominatim API for geocoding
+  async searchLocations(query: string): Promise<SearchResult[]> {
+    if (!query || query.length < 2) return [];
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&accept-language=en`,
+        { headers: { 'User-Agent': 'WeatherApp/1.0' } }
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.map((item: any) => ({
+        name: item.display_name?.split(',')[0] || item.name || query,
+        region: item.state || '',
+        country: item.country || '',
+        latitude: parseFloat(item.lat),
+        longitude: parseFloat(item.lon),
+      }));
+    } catch { return []; }
   },
 
-  async reverseGeocode(_lat: number, _lon: number): Promise<SearchResult> {
-    return { name: 'Unknown', region: '', country: '', latitude: _lat, longitude: _lon };
+  async reverseGeocode(lat: number, lon: number): Promise<SearchResult | null> {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&accept-language=en`,
+        { headers: { 'User-Agent': 'WeatherApp/1.0' } }
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data?.address) return null;
+      return {
+        name: data.address.city || data.address.town || data.address.village || data.address.county || 'Unknown',
+        region: data.address.state || '',
+        country: data.address.country || '',
+        latitude: lat,
+        longitude: lon,
+      };
+    } catch { return null; }
   },
 
   async lookupByIP(): Promise<SearchResult | null> {
@@ -248,17 +232,18 @@ export const weatherAPI = {
       const raw = await fetchAPI<any>('/ip-lookup');
       const geo = raw?.geo || raw;
       if (geo?.lat && geo?.lon) {
-        return {
+        const loc = {
           name: geo.city || geo.city_name || 'Unknown',
           region: geo.region || '',
           country: geo.country || '',
           latitude: geo.lat,
           longitude: geo.lon,
         };
+        // Try reverse geocode to get a proper city name
+        const rev = await weatherAPI.reverseGeocode(geo.lat, geo.lon);
+        return rev || loc;
       }
       return null;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   },
 };
