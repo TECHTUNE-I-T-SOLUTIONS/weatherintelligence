@@ -40,6 +40,20 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
+    
+    // Forward geo headers from IP lookup responses in the JSON body
+    const country = response.headers.get('X-Country');
+    const region = response.headers.get('X-Region');
+    const city = response.headers.get('X-City');
+    
+    if (country || region || city) {
+      data._geo = {
+        city: city || '',
+        region: region || '',
+        country: country || '',
+      };
+    }
+
     return NextResponse.json(data);
   } catch (error) {
     return NextResponse.json(

@@ -199,9 +199,9 @@ export const weatherAPI = {
 
   async lookupByIP(): Promise<SearchResult | null> {
     try {
-      // Call /ip-lookup as a separate endpoint per docs
-      const raw = await fetchAPI<any>('/ip-lookup');
-      const geo = raw?.geo || raw;
+      // Use /weather?ip=auto per docs — works on all plans, geo in response body
+      const raw = await fetchAPI<any>('/weather?ip=auto&days=1&ai=false&units=metric');
+      const geo = raw?._geo || raw;
       if (geo?.lat && geo?.lon) {
         const loc = {
           name: geo.city || geo.city_name || 'Unknown',
